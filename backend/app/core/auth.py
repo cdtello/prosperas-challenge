@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta, timezone
 
-from jose import JWTError, jwt
+import jwt
 from passlib.context import CryptContext
 
 from app.core.config import settings
@@ -29,5 +29,5 @@ def decode_access_token(token: str) -> str:
         if user_id is None:
             raise ValueError("Token missing subject")
         return user_id
-    except JWTError as exc:
+    except jwt.PyJWTError as exc:
         raise ValueError("Invalid token") from exc

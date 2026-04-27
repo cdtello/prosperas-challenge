@@ -40,9 +40,16 @@ services:
       - AWS_ACCESS_KEY_ID=test
       - AWS_SECRET_ACCESS_KEY=test
       - AWS_DEFAULT_REGION=us-east-1
-    volumes:
-      - ./local/init-aws.sh:/init-aws.sh
-    entrypoint: ["/bin/sh", "/init-aws.sh"]
+      - AWS_DEFAULT_OUTPUT=json
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name prosperas-jobs-dlq
+        aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name prosperas-jobs \
+          --attributes '{"RedrivePolicy":"{\"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:000000000000:prosperas-jobs-dlq\",\"maxReceiveCount\":\"3\"}"}'
+        aws --endpoint-url=http://localstack:4566 s3 mb s3://prosperas-reports
+        echo "AWS resources ready"
     restart: "no"
 
   backend:
@@ -97,17 +104,17 @@ services:
       init-aws:
         condition: service_completed_successfully
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - "3000:3000"
-    environment:
-      - VITE_API_URL=http://localhost:8000
-    depends_on:
-      backend:
-        condition: service_healthy
+  # frontend: se agrega en feature/frontend
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - VITE_API_URL=http://localhost:8000
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
 
 volumes:
   postgres_data:
