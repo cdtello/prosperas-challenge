@@ -1,10 +1,12 @@
 # Prosperas Reports — Async Report Generation Platform
 
-![CI/CD](https://github.com/cdtello/prosperas-challenge/actions/workflows/deploy.yml/badge.svg)
+![CI/CD](https://github.com/cdtello/prosperas-challenge/actions/workflows/deploy.yml/badge.svg?branch=main)
 
 Sistema SaaS de reportes asincrónicos construido con FastAPI, AWS SQS, PostgreSQL y React 18.
 
-**URL de producción:** `https://TODO-url-produccion.com` <!-- Se actualiza al hacer deploy -->
+**Frontend (producción):** `https://d2v3qmq1azg45r.cloudfront.net`
+**API (producción):** `http://34.229.46.113:8000`
+**API Docs:** `http://34.229.46.113:8000/docs`
 
 ---
 
@@ -23,20 +25,19 @@ docker compose up --build
 
 ---
 
-## Documentación
-
-| Documento | Descripción |
-|-----------|-------------|
-| [TECHNICAL_DOCS.md](./TECHNICAL_DOCS.md) | Arquitectura, servicios AWS, decisiones de diseño, setup local, CI/CD, variables de entorno, tests |
-| [SKILL.md](./SKILL.md) | Contexto para agente IA: mapa del repo, patrones, comandos, errores comunes, cómo extender |
-| [docs/AI_WORKFLOW.md](./docs/AI_WORKFLOW.md) | Evidencia del uso de IA en el desarrollo |
-
----
-
 ## Arquitectura
 
 ```
-React 18 → FastAPI → SQS → Worker (asyncio) → PostgreSQL + S3
+Browser (HTTPS)
+    │
+    ├─ https://d2v3qmq1azg45r.cloudfront.net/         → CloudFront → S3 (React SPA)
+    └─ https://d2v3qmq1azg45r.cloudfront.net/jobs     → CloudFront → EC2:8000 (FastAPI)
+                                                                            │
+                                                                     AWS SQS + DLQ
+                                                                            │
+                                                                     Worker (asyncio)
+                                                                            │
+                                                              RDS PostgreSQL + S3
 ```
 
 Ver diagrama completo en [TECHNICAL_DOCS.md](./TECHNICAL_DOCS.md#1-diagrama-de-arquitectura).
@@ -45,16 +46,39 @@ Ver diagrama completo en [TECHNICAL_DOCS.md](./TECHNICAL_DOCS.md#1-diagrama-de-a
 
 ## Stack
 
-| Capa | Tecnología |
-|------|------------|
-| Backend API | Python 3.11 / FastAPI |
-| Cola | AWS SQS + Dead Letter Queue |
-| Base de datos | AWS RDS PostgreSQL |
-| Workers | Python asyncio (`asyncio.gather`) |
-| Almacenamiento | AWS S3 |
-| Frontend | React 18 + Vite + TailwindCSS |
-| Local | LocalStack + Docker Compose |
-| CI/CD | GitHub Actions → ECS Fargate |
+| Capa | Tecnología | Dónde |
+|------|------------|-------|
+| Frontend | React 18 + Vite + TailwindCSS | S3 + CloudFront (HTTPS) |
+| Backend API | Python 3.11 / FastAPI | EC2 t3.micro |
+| Workers | Python asyncio + Semaphore | EC2 t3.micro |
+| Cola | AWS SQS + Dead Letter Queue | AWS |
+| Base de datos | AWS RDS PostgreSQL 15 | AWS |
+| Almacenamiento | AWS S3 | AWS |
+| Imágenes Docker | AWS ECR | AWS |
+| Local dev | LocalStack + Docker Compose | Docker |
+| CI/CD | GitHub Actions | → EC2 + S3 + CloudFront |
+
+---
+
+## CI/CD Pipeline
+
+```
+push → main
+  ├── test:   ruff lint + pytest (95% coverage, fail_under=90)
+  ├── backend: build Docker → ECR → SSH EC2 → docker compose up
+  ├── frontend: npm build → S3 sync → CloudFront invalidation
+  └── smoke-test: curl /health + curl CloudFront
+```
+
+---
+
+## Documentación
+
+| Documento | Descripción |
+|-----------|-------------|
+| [TECHNICAL_DOCS.md](./TECHNICAL_DOCS.md) | Arquitectura, servicios AWS, decisiones de diseño, setup local, CI/CD, variables de entorno, tests |
+| [SKILL.md](./SKILL.md) | Contexto para agente IA: mapa del repo, patrones, comandos, errores comunes, cómo extender |
+| [docs/AI_WORKFLOW.md](./docs/AI_WORKFLOW.md) | Evidencia del uso de IA en el desarrollo |
 
 ---
 
