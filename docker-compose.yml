@@ -1,0 +1,121 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: prosperas
+      POSTGRES_PASSWORD: prosperas
+      POSTGRES_DB: prosperas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U prosperas"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  localstack:
+    image: localstack/localstack:3.4
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=sqs,s3
+      - DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_REGION=us-east-1
+    volumes:
+      - localstack_data:/var/lib/localstack
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:4566/_localstack/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  init-aws:
+    image: amazon/aws-cli:latest
+    depends_on:
+      localstack:
+        condition: service_healthy
+    environment:
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - AWS_DEFAULT_OUTPUT=json
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name prosperas-jobs-dlq
+        aws --endpoint-url=http://localstack:4566 sqs create-queue --queue-name prosperas-jobs \
+          --attributes '{"RedrivePolicy":"{\"deadLetterTargetArn\":\"arn:aws:sqs:us-east-1:000000000000:prosperas-jobs-dlq\",\"maxReceiveCount\":\"3\"}"}'
+        aws --endpoint-url=http://localstack:4566 s3 mb s3://prosperas-reports
+        echo "AWS resources ready"
+    restart: "no"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://prosperas:prosperas@postgres:5432/prosperas
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/prosperas-jobs
+      - SQS_DLQ_URL=http://localstack:4566/000000000000/prosperas-jobs-dlq
+      - S3_BUCKET_NAME=prosperas-reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      init-aws:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    command: python -m app.worker.main
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://prosperas:prosperas@postgres:5432/prosperas
+      - AWS_ENDPOINT_URL=http://localstack:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - SQS_QUEUE_URL=http://localstack:4566/000000000000/prosperas-jobs
+      - SQS_DLQ_URL=http://localstack:4566/000000000000/prosperas-jobs-dlq
+      - S3_BUCKET_NAME=prosperas-reports
+    depends_on:
+      postgres:
+        condition: service_healthy
+      localstack:
+        condition: service_healthy
+      init-aws:
+        condition: service_completed_successfully
+
+  # frontend: se agrega en feature/frontend
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - VITE_API_URL=http://localhost:8000
+  #   depends_on:
+  #     backend:
+  #       condition: service_healthy
+
+volumes:
+  postgres_data:
+  localstack_data:
