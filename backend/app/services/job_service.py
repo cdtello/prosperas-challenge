@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.job import Job, JobStatus
@@ -21,13 +21,15 @@ async def get_job_by_id(db: AsyncSession, job_id: str, user_id: str) -> Job | No
 
 async def list_jobs(db: AsyncSession, user_id: str, page: int, page_size: int) -> tuple[list[Job], int]:
     offset = (page - 1) * page_size
-    result = await db.execute(
+
+    jobs_result = await db.execute(
         select(Job).where(Job.user_id == user_id).order_by(Job.created_at.desc()).offset(offset).limit(page_size)
     )
-    jobs = list(result.scalars().all())
+    jobs = list(jobs_result.scalars().all())
 
-    count_result = await db.execute(select(Job).where(Job.user_id == user_id))
-    total = len(list(count_result.scalars().all()))
+    count_result = await db.execute(select(func.count()).select_from(Job).where(Job.user_id == user_id))
+    total = count_result.scalar_one()
+
     return jobs, total
 
 

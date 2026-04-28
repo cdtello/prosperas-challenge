@@ -7,6 +7,13 @@ from app.worker.processor import process_message
 
 logger = logging.getLogger(__name__)
 
+_semaphore = asyncio.Semaphore(settings.WORKER_CONCURRENCY)
+
+
+async def _process_with_semaphore(message: dict) -> None:
+    async with _semaphore:
+        await process_message(message)
+
 
 async def poll_and_process() -> None:
     logger.info("Worker started — polling SQS with concurrency=%d", settings.WORKER_CONCURRENCY)
@@ -17,10 +24,10 @@ async def poll_and_process() -> None:
             await asyncio.sleep(1)
             continue
 
-        logger.info("Received %d message(s)", len(messages))
-        tasks = [process_message(msg) for msg in messages]
+        logger.info("Received %d message(s) — dispatching concurrently", len(messages))
+        tasks = [_process_with_semaphore(msg) for msg in messages]
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         for i, result in enumerate(results):
             if isinstance(result, Exception):
-                logger.error("Message %d processing raised: %s", i, result)
+                logger.error("Message %d failed: %s", i, result)
