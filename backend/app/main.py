@@ -7,6 +7,7 @@ from app.adapters.inbound.http.routes import auth, jobs
 from app.adapters.outbound.persistence.models import JobModel, UserModel  # noqa: F401
 from app.infrastructure.db import Base, engine
 from app.infrastructure.errors import register_error_handlers
+from app.infrastructure.middleware import RequestContextMiddleware
 
 
 @asynccontextmanager
@@ -18,6 +19,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Prosperas Reports API", version="1.0.0", lifespan=lifespan)
 
+app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],

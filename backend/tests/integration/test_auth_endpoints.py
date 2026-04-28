@@ -2,6 +2,13 @@ import pytest
 
 
 @pytest.mark.asyncio
+async def test_health_has_request_id_header(client):
+    response = await client.get("/health")
+    assert response.status_code == 200
+    assert "x-request-id" in response.headers
+
+
+@pytest.mark.asyncio
 async def test_register_returns_201_with_token(client):
     response = await client.post(
         "/auth/register",
