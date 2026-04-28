@@ -1,26 +1,12 @@
 import json
 
-import aioboto3
-
+from app.core.aws import client_kwargs, get_session
 from app.core.config import settings
-
-_session = aioboto3.Session()
-
-
-def _client_kwargs() -> dict:
-    kwargs = {
-        "region_name": settings.AWS_DEFAULT_REGION,
-        "aws_access_key_id": settings.AWS_ACCESS_KEY_ID,
-        "aws_secret_access_key": settings.AWS_SECRET_ACCESS_KEY,
-    }
-    if settings.AWS_ENDPOINT_URL:
-        kwargs["endpoint_url"] = settings.AWS_ENDPOINT_URL
-    return kwargs
 
 
 async def upload_report(job_id: str, data: dict) -> str:
     key = f"reports/{job_id}.json"
-    async with _session.client("s3", **_client_kwargs()) as s3:
+    async with get_session().client("s3", **client_kwargs()) as s3:
         await s3.put_object(
             Bucket=settings.S3_BUCKET_NAME,
             Key=key,

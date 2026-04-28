@@ -6,8 +6,7 @@ on:
 
 env:
   AWS_REGION: us-east-1
-  ECR_BACKEND: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-backend
-  ECR_WORKER: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-worker
+  ECR_IMAGE: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-app
 
 jobs:
   test:
@@ -47,20 +46,13 @@ jobs:
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
-        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push backend image
+      - name: Build and push unified app image
         run: |
-          docker build -t $ECR_BACKEND:latest -t $ECR_BACKEND:${{ github.sha }} ./backend
-          docker push $ECR_BACKEND:latest
-          docker push $ECR_BACKEND:${{ github.sha }}
-
-      - name: Build and push worker image
-        run: |
-          docker build -t $ECR_WORKER:latest -t $ECR_WORKER:${{ github.sha }} ./backend
-          docker push $ECR_WORKER:latest
-          docker push $ECR_WORKER:${{ github.sha }}
+          docker build -t $ECR_IMAGE:latest -t $ECR_IMAGE:${{ github.sha }} ./backend
+          docker push $ECR_IMAGE:latest
+          docker push $ECR_IMAGE:${{ github.sha }}
 
       - name: Deploy to EC2 via SSH
         uses: appleboy/ssh-action@v1.0.3
@@ -69,36 +61,29 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Login to ECR
             aws ecr get-login-password --region us-east-1 | \
               docker login --username AWS --password-stdin 990151165442.dkr.ecr.us-east-1.amazonaws.com
 
-            # Create app directory
             mkdir -p /home/ec2-user/app
-
-            # Write docker-compose.prod.yml
             cat > /home/ec2-user/app/docker-compose.yml << 'COMPOSE'
             services:
               backend:
-                image: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-backend:latest
+                image: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-app:latest
                 ports:
                   - "8000:8000"
                 env_file: /home/ec2-user/app/.env
                 restart: unless-stopped
 
               worker:
-                image: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-worker:latest
+                image: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-app:latest
                 command: python -m app.worker.main
                 env_file: /home/ec2-user/app/.env
                 restart: unless-stopped
             COMPOSE
 
-            # Pull latest images and restart
             cd /home/ec2-user/app
             docker compose pull
             docker compose up -d --remove-orphans
-
-            # Smoke test
             sleep 10
             curl -f http://localhost:8000/health || exit 1
             echo "Deploy OK"

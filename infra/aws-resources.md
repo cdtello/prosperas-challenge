@@ -23,8 +23,9 @@ maxReceiveCount: 3
 
 | Repositorio | URI |
 |-------------|-----|
-| Backend | 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-backend |
-| Worker | 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-worker |
+| App (backend + worker) | 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-app |
+
+> Una sola imagen para backend y worker — el worker usa `command: python -m app.worker.main`
 
 ## RDS PostgreSQL
 
