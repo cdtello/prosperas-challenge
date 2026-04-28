@@ -1,0 +1,24 @@
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B"]
+ignore = ["B008", "UP017"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["app"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+addopts = "--tb=short -q"
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["app/infrastructure/config.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 70

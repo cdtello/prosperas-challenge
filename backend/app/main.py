@@ -3,9 +3,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, jobs
-from app.core.db import Base, engine
-from app.core.errors import register_error_handlers
+from app.adapters.inbound.http.routes import auth, jobs
+from app.adapters.outbound.persistence.models import JobModel, UserModel  # noqa: F401
+from app.infrastructure.db import Base, engine
+from app.infrastructure.errors import register_error_handlers
 
 
 @asynccontextmanager
