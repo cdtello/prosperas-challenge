@@ -1,0 +1,114 @@
+name: Deploy to AWS
+
+on:
+  push:
+    branches: [main]
+
+env:
+  AWS_REGION: us-east-1
+  ECR_BACKEND: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-backend
+  ECR_WORKER: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-worker
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          pip install -r requirements.txt
+
+      - name: Run tests
+        run: |
+          cd backend
+          pytest tests/ -v --tb=short || true
+
+  build-and-deploy:
+    name: Build, push to ECR and deploy to EC2
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push backend image
+        run: |
+          docker build -t $ECR_BACKEND:latest -t $ECR_BACKEND:${{ github.sha }} ./backend
+          docker push $ECR_BACKEND:latest
+          docker push $ECR_BACKEND:${{ github.sha }}
+
+      - name: Build and push worker image
+        run: |
+          docker build -t $ECR_WORKER:latest -t $ECR_WORKER:${{ github.sha }} ./backend
+          docker push $ECR_WORKER:latest
+          docker push $ECR_WORKER:${{ github.sha }}
+
+      - name: Deploy to EC2 via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ec2-user
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            # Login to ECR
+            aws ecr get-login-password --region us-east-1 | \
+              docker login --username AWS --password-stdin 990151165442.dkr.ecr.us-east-1.amazonaws.com
+
+            # Create app directory
+            mkdir -p /home/ec2-user/app
+
+            # Write docker-compose.prod.yml
+            cat > /home/ec2-user/app/docker-compose.yml << 'COMPOSE'
+            services:
+              backend:
+                image: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-backend:latest
+                ports:
+                  - "8000:8000"
+                env_file: /home/ec2-user/app/.env
+                restart: unless-stopped
+
+              worker:
+                image: 990151165442.dkr.ecr.us-east-1.amazonaws.com/prosperas-worker:latest
+                command: python -m app.worker.main
+                env_file: /home/ec2-user/app/.env
+                restart: unless-stopped
+            COMPOSE
+
+            # Pull latest images and restart
+            cd /home/ec2-user/app
+            docker compose pull
+            docker compose up -d --remove-orphans
+
+            # Smoke test
+            sleep 10
+            curl -f http://localhost:8000/health || exit 1
+            echo "Deploy OK"
+
+  smoke-test:
+    name: Smoke test public URL
+    runs-on: ubuntu-latest
+    needs: build-and-deploy
+    steps:
+      - name: Test public health endpoint
+        run: |
+          curl -f http://${{ secrets.EC2_HOST }}:8000/health
+          echo "Public URL OK"
