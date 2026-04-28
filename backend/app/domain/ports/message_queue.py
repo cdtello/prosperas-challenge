@@ -1,0 +1,9 @@
+from typing import Protocol
+
+
+class IMessageQueue(Protocol):
+    async def publish(self, job_id: str) -> None: ...
+
+    async def receive(self, max_messages: int) -> list[dict]: ...
+
+    async def delete(self, receipt_handle: str) -> None: ...

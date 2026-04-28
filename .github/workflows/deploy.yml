@@ -25,10 +25,15 @@ jobs:
           cd backend
           pip install -r requirements.txt
 
-      - name: Run tests
+      - name: Lint with ruff
         run: |
           cd backend
-          pytest tests/ -v --tb=short || true
+          ruff check app/
+
+      - name: Run tests with coverage
+        run: |
+          cd backend
+          pytest tests/ -v --cov=app --cov-report=term-missing --cov-fail-under=70
 
   build-and-deploy:
     name: Build, push to ECR and deploy to EC2
