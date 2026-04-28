@@ -95,8 +95,11 @@ async def test_s3_upload_returns_localstack_url_when_endpoint_set():
 
 
 @pytest.mark.asyncio
-async def test_s3_upload_returns_aws_url_in_production():
+async def test_s3_upload_returns_presigned_url_in_production():
     client, ctx = _mock_s3_client()
+    presigned_url = "https://prosperas-reports.s3.amazonaws.com/reports/job-1.json?X-Amz-Signature=abc"
+    client.generate_presigned_url = AsyncMock(return_value=presigned_url)
+
     with (
         patch("app.adapters.outbound.storage.s3_storage.get_session") as mock_session,
         patch("app.adapters.outbound.storage.s3_storage.settings") as mock_settings,
@@ -108,5 +111,9 @@ async def test_s3_upload_returns_aws_url_in_production():
 
         url = await S3FileStorage().upload_report("job-1", {"key": "value"})
 
-    assert "s3.us-east-1.amazonaws.com" in url
-    assert "prosperas-reports" in url
+    assert url == presigned_url
+    client.generate_presigned_url.assert_called_once_with(
+        "get_object",
+        Params={"Bucket": "prosperas-reports", "Key": "reports/job-1.json"},
+        ExpiresIn=604800,
+    )
