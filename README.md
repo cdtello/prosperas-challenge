@@ -1,10 +1,11 @@
 # Prosperas Reports — Async Report Generation Platform
 
-![CI/CD](https://github.com/cdtello/prosperas-challenge/actions/workflows/deploy.yml/badge.svg)
+![CI/CD](https://github.com/cdtello/prosperas-challenge/actions/workflows/deploy.yml/badge.svg?branch=main)
 
 Sistema SaaS de reportes asincrónicos construido con FastAPI, AWS SQS, PostgreSQL y React 18.
 
-**URL de producción:** `https://TODO-url-produccion.com` <!-- Se actualiza al hacer deploy -->
+**URL de producción:** `http://34.229.46.113:8000`  
+**Docs API:** `http://34.229.46.113:8000/docs`
 
 ---
 
