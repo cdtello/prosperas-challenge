@@ -16,9 +16,12 @@ addopts = "--tb=short -q"
 
 [tool.coverage.run]
 source = ["app"]
-omit = ["app/infrastructure/config.py"]
+omit = [
+    "app/infrastructure/config.py",
+    "app/worker/main.py",
+]
 
 [tool.coverage.report]
 show_missing = true
 skip_covered = false
-fail_under = 70
+fail_under = 90
